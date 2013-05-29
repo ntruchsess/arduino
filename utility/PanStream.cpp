@@ -24,7 +24,7 @@ REGISTER panStream((byte*)&PanStream.send_message,(byte)sizeof(PanStreamMessage)
  * 
  */
 DECLARE_REGISTERS_START()
-&PanStream
+&panStream
 DECLARE_REGISTERS_END()
 
 /**
