@@ -1,8 +1,6 @@
 #include "panstamp.h"
 #include "PanStream.h"
 
-const void setPanStreamValue(byte rId, byte *v);
-
 /**
  * Declaration of common callback functions
  */
@@ -16,7 +14,7 @@ DEFINE_COMMON_REGISTERS()
 /*
  * Definition of custom registers
  */
-REGISTER panStream((byte*)&PanStream.send_message,(byte)sizeof(PanStreamMessage), NULL, &setPanStreamValue);
+REGISTER panStream((byte*)&PanStream.send_message,(byte)sizeof(PanStreamStatusMessage), NULL, NULL);
 
 /**
  * 
@@ -34,8 +32,11 @@ DECLARE_REGISTERS_END()
  */
 DEFINE_COMMON_CALLBACKS()
 
+void onStatusReceived(SWPACKET *status);
+
 PanStreamClass::PanStreamClass() {
-  send_len = 0;
+  panstamp.statusReceived = &onStatusReceived;
+  send_message.num_bytes = 0;
   receive_pos = 0;
   receive_len = 0;
   master_id = 0;
@@ -44,24 +45,22 @@ PanStreamClass::PanStreamClass() {
 
 size_t PanStreamClass::write(uint8_t c) {
 
+  uint8_t send_len = send_message.num_bytes;
   if (send_len == PANSTREAM_BUFFERSIZE) {
     return 0;
   }
-  send_buffer[send_len++] = c;
-  if (send_len == PANSTREAM_BUFFERSIZE) {
+  send_message.send_buffer[send_len++] = c;
+  send_message.num_bytes = send_len;
+  if (send_len >= PANSTREAM_MAXDATASIZE) {
     flush();
   }
   return 1;
 };
 
-
-
 int PanStreamClass::available() {
 
   return receive_len;
 };
-
-
 
 int PanStreamClass::read() {
 
@@ -72,33 +71,23 @@ int PanStreamClass::read() {
   return ret;
 };
 
-
-
 int PanStreamClass::peek() {
 
   if (receive_len == 0) return -1;
   return receive_buffer[receive_pos];
 };
 
-
-
 void PanStreamClass::flush() {
 
   if (send_message.send_id==0) {
     prepareSendMessage();
-    getRegister(REGI_STREAM)->getData();
+    sendSwapStatus();
   }
 };
 
-
-
 void PanStreamClass::prepareSendMessage() {
 
-  for (uint8_t i=0;i<send_len;i++) {
-    send_message.buffer[i]=send_buffer[i];
-  }
-  send_message.num_bytes = send_len;
-  if (send_len > 0) {
+  if (send_message.num_bytes > 0) {
     ++id;
     if (id==0) {
       id++;
@@ -107,14 +96,10 @@ void PanStreamClass::prepareSendMessage() {
   } else {
     send_message.send_id = 0;
   }
-  send_len = 0;
 }
 
+void PanStreamClass::receiveMessage(PanStreamReceivedMessage* received) {
 
-
-void PanStreamClass::setValue(byte* v) {
-
-  PanStreamMessage* received = (PanStreamMessage*)v;
   if (received->send_id==master_id) {
     return; // received this packet before, just send acknowledge again
   }
@@ -128,13 +113,26 @@ void PanStreamClass::setValue(byte* v) {
           PANSTREAM_BUFFERSIZE - receive_len : received->num_bytes;
   send_message.received_bytes = receive_bytes;
   for (uint8_t i = 0; i < receive_bytes; i++) {
-    receive_buffer[(receive_pos + receive_len + i) % PANSTREAM_BUFFERSIZE] = received->buffer[i];
+    receive_buffer[(receive_pos + receive_len + i) % PANSTREAM_BUFFERSIZE] = received->data[i];
   }
   receive_len+=receive_bytes;
+  sendSwapStatus();
 };
 
-const void setPanStreamValue(byte rId, byte *v) {
-  PanStream.setValue(v);
+void PanStreamClass::sendSwapStatus() {
+  SWSTATUS packet = SWSTATUS(REGI_STREAM, (byte*)&send_message, send_message.num_bytes+3);
+  packet.send();
+};
+
+void onStatusReceived(SWPACKET *status) {
+  PanStreamReceivedMessage message;
+  byte *data = status->value.data;
+  message.received_bytes = data[0];
+  message.received_id = data[1];
+  message.send_id = data[2];
+  message.num_bytes = status->value.length-3;
+  message.data = data+3;
+  PanStream.receiveMessage(&message);
 };
 
 PanStreamClass PanStream;

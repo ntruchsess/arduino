@@ -1,11 +1,13 @@
 #ifndef _PANSTREAM_H
 #define _PANSTREAM_H
 
-#define PANSTREAM_BUFFERSIZE 64
-
 #include "Arduino.h"
+#include "swpacket.h"
 #include "register.h"
 #include "commonregs.h"
+
+#define PANSTREAM_BUFFERSIZE 64
+#define PANSTREAM_MAXDATASIZE SWAP_REG_VAL_LEN-4
 
 #define SWAP_MANUFACT_ID 1
 #define SWAP_PRODUCT_ID 2
@@ -22,12 +24,20 @@ DEFINE_REGINDEX_START()
 REGI_STREAM
 DEFINE_REGINDEX_END()
 
-struct PanStreamMessage {
+struct PanStreamReceivedMessage {
   uint8_t received_bytes;
   uint8_t received_id;
   uint8_t send_id;
   uint8_t num_bytes;
-  byte buffer[PANSTREAM_BUFFERSIZE];
+  byte *data;
+};
+
+struct PanStreamStatusMessage {
+  uint8_t received_bytes;
+  uint8_t received_id;
+  uint8_t send_id;
+  byte send_buffer[PANSTREAM_BUFFERSIZE];
+  uint8_t num_bytes;
 };
 
 class PanStreamClass : public Stream
@@ -43,20 +53,19 @@ public:
   int peek();
   void flush();
 
-  PanStreamMessage send_message;
-  void setValue(byte *v);
+  PanStreamStatusMessage send_message;
+  void receiveMessage(PanStreamReceivedMessage *v);
 
 protected:
 
 private:
-  byte send_buffer[PANSTREAM_BUFFERSIZE];
-  uint8_t send_len;
-  byte receive_buffer[PANSTREAM_BUFFERSIZE];
+    byte receive_buffer[PANSTREAM_BUFFERSIZE];
   uint8_t receive_pos;
   uint8_t receive_len;
   uint8_t master_id;
   uint8_t id;
   void prepareSendMessage();
+  void sendSwapStatus();
 };
 
 extern PanStreamClass PanStream;
