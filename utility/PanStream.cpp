@@ -121,14 +121,16 @@ void PanStreamClass::setValue(byte* v) {
   if (received->received_id==send_message.send_id) { //previous package acknowledged by master -> prepare new package send data
     prepareSendMessage();
   }
+  master_id = received->send_id;
   send_message.received_id = master_id; //acknowledge package
-  send_message.received_bytes = //acknowledge number of bytes transfered to receive_buffer
-  (received->num_bytes + receive_len > PANSTREAM_BUFFERSIZE) ?
-  PANSTREAM_BUFFERSIZE - receive_len : received->num_bytes;
-
-  for (uint8_t i = 0; i < send_message.received_bytes; i++) {
+  uint8_t receive_bytes = //acknowledge number of bytes transfered to receive_buffer
+      (received->num_bytes + receive_len > PANSTREAM_BUFFERSIZE) ?
+          PANSTREAM_BUFFERSIZE - receive_len : received->num_bytes;
+  send_message.received_bytes = receive_bytes;
+  for (uint8_t i = 0; i < receive_bytes; i++) {
     receive_buffer[(receive_pos + receive_len + i) % PANSTREAM_BUFFERSIZE] = received->buffer[i];
   }
+  receive_len+=receive_bytes;
 };
 
 const void setPanStreamValue(byte rId, byte *v) {
