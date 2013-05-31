@@ -89,7 +89,6 @@ private:
   uint8_t receive_len;
   uint8_t master_id;
   uint8_t id;
-  void prepareSendMessageId();
   void sendSwapStatus();
 };
 
