@@ -1,3 +1,27 @@
+/**
+ * Copyright (c) 2013 Norbert Truchsess
+ *
+ * This file is a contribution to the panStamp project.
+ *
+ * panStamp  is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation; either version 3 of the License, or
+ * any later version.
+ *
+ * panStamp is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with panStamp; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301
+ * USA
+ *
+ * Author: Norbert Truchsess
+ * Creation date: 05/30/2013
+ */
+
 #include "panstamp.h"
 #include "PanStream.h"
 
@@ -14,7 +38,7 @@ DEFINE_COMMON_REGISTERS()
 /*
  * Definition of custom registers
  */
-REGISTER panStream((byte*)&PanStream.send_message,(byte)sizeof(PanStreamStatusMessage), NULL, NULL);
+REGISTER panStream((byte*)&PanStream.send_message,(byte)PANSTREAM_MAXDATASIZE, NULL, NULL);
 
 /**
  * 
@@ -36,7 +60,7 @@ void onStatusReceived(SWPACKET *status);
 
 PanStreamClass::PanStreamClass() {
   panstamp.statusReceived = &onStatusReceived;
-  send_message.num_bytes = 0;
+  send_len = 0;
   receive_pos = 0;
   receive_len = 0;
   master_id = 0;
@@ -45,12 +69,10 @@ PanStreamClass::PanStreamClass() {
 
 size_t PanStreamClass::write(uint8_t c) {
 
-  uint8_t send_len = send_message.num_bytes;
   if (send_len == PANSTREAM_BUFFERSIZE) {
     return 0;
   }
   send_message.send_buffer[send_len++] = c;
-  send_message.num_bytes = send_len;
   if (send_len >= PANSTREAM_MAXDATASIZE) {
     flush();
   }
@@ -79,44 +101,62 @@ int PanStreamClass::peek() {
 
 void PanStreamClass::flush() {
 
-  if (send_message.send_id==0) {
-    prepareSendMessage();
-    sendSwapStatus();
-  }
-};
-
-void PanStreamClass::prepareSendMessage() {
-
-  if (send_message.num_bytes > 0) {
-    ++id;
+  // send new packet only if there's no outstanding acknowledge
+  if (send_message.send_id==0 && send_len > 0) {
+    id++;
     if (id==0) {
       id++;
     }
     send_message.send_id = id;
-  } else {
-    send_message.send_id = 0;
+    send_message.num_bytes = send_len > PANSTREAM_MAXDATASIZE ? PANSTREAM_MAXDATASIZE : send_len;
+    sendSwapStatus();
   }
-}
+};
 
 void PanStreamClass::receiveMessage(PanStreamReceivedMessage* received) {
 
-  if (received->send_id==master_id) {
-    return; // received this packet before, just send acknowledge again
+  bool send = false;
+  if (received->received_id==send_message.send_id) { //previous packet acknowledged by master -> prepare new packet send data
+    // discard data of previous packet
+    uint8_t remaining_bytes = send_len-received->received_bytes;
+    for (uint8_t i = 0; i < remaining_bytes; i++) {
+      send_message.send_buffer[i] = send_message.send_buffer[received->received_bytes+i];
+    }
+    send_len = remaining_bytes;
+    send_message.num_bytes = remaining_bytes > PANSTREAM_MAXDATASIZE ? PANSTREAM_MAXDATASIZE : remaining_bytes;
+    if (remaining_bytes > 0) {
+      id++;
+      if (id==0) {
+        id++;
+      }
+      send_message.send_id = id;
+      send = true;
+    } else {
+      send_message.send_id = 0;
+    }
+  } else {
+    //last packet not acknowledged -> send last packet data unaltered.
+    send = true;
   }
-  if (received->received_id==send_message.send_id) { //previous package acknowledged by master -> prepare new package send data
-    prepareSendMessage();
+  if (received->send_id!=0) {
+    if (received->send_id!=master_id) { //new packet received (not a retransmit of a previously retrieved packet)
+      master_id = received->send_id;
+      uint8_t receive_bytes = //acknowledge number of bytes transfered to receive_buffer
+          (received->num_bytes + receive_len > PANSTREAM_BUFFERSIZE) ?
+              PANSTREAM_BUFFERSIZE - receive_len : received->num_bytes;
+      send_message.received_bytes = receive_bytes;
+      for (uint8_t i = 0; i < receive_bytes; i++) {
+        receive_buffer[(receive_pos + receive_len + i) % PANSTREAM_BUFFERSIZE] = received->data[i];
+      }
+      receive_len+=receive_bytes;
+      send_message.received_id = master_id; //acknowledge package
+    }
+    // if packet data was received before (received->send_id==master_id), acknowledge again
+    send = true;
   }
-  master_id = received->send_id;
-  send_message.received_id = master_id; //acknowledge package
-  uint8_t receive_bytes = //acknowledge number of bytes transfered to receive_buffer
-      (received->num_bytes + receive_len > PANSTREAM_BUFFERSIZE) ?
-          PANSTREAM_BUFFERSIZE - receive_len : received->num_bytes;
-  send_message.received_bytes = receive_bytes;
-  for (uint8_t i = 0; i < receive_bytes; i++) {
-    receive_buffer[(receive_pos + receive_len + i) % PANSTREAM_BUFFERSIZE] = received->data[i];
+  if (send) {
+    sendSwapStatus();
   }
-  receive_len+=receive_bytes;
-  sendSwapStatus();
 };
 
 void PanStreamClass::sendSwapStatus() {
