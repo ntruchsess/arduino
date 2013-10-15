@@ -58,8 +58,8 @@ ServoFirmata servo;
 #include <utility/I2CFirmata.h>
 I2CFirmata i2c;
 
-#include <utility/OneWireFirmata.h>
-OneWireFirmata oneWire;
+//#include <utility/OneWireFirmata.h>
+//OneWireFirmata oneWire;
 
 #include <utility/DS2482Firmata.h>
 DS2482Firmata ds2482;
@@ -100,7 +100,7 @@ void systemResetCallback()
       // turns off pullup, configures everything
       Firmata.setPinMode(i, ANALOG);
 #endif
-    } else {
+    } else if (IS_PIN_DIGITAL(i)) {
 #ifdef DigitalOutputFirmata_h
       // sets the output to 0, configures portConfigInputs
       Firmata.setPinMode(i, OUTPUT);

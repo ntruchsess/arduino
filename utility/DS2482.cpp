@@ -104,10 +104,7 @@ bool DS2482::configure(uint8_t config)
   Wire.write(config | (~config << 4));
 
   if (readByte() != config)
-    {
-      this->config = config;
-      return true;
-    }
+    return true;
   reset();
   return false;
 }

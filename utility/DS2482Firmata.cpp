@@ -19,7 +19,18 @@ boolean DS2482Firmata::handlePinMode(byte pin, int mode)
 {
   if (IS_PIN_I2C(pin) && mode == ONEWIRE)
     {
-      //oneWireConfig(pin,ONEWIRE_POWER);
+      uint8_t pinmode = Firmata.getPinMode(pin);
+      if (pinmode == IGNORE)
+        return false;
+      if (pinmode != I2C && pinmode != ONEWIRE)
+        {
+          for (byte i=0; i < TOTAL_PINS; i++)
+            {
+              if (IS_PIN_I2C(i))
+                Firmata.setPinMode(i,ONEWIRE);
+            }
+        }
+      configure(DS2482_FIRMATA_CONFIG_FORCE,0);
       return true;
     }
   return false;
@@ -40,15 +51,18 @@ boolean DS2482Firmata::handleSysex(byte command, byte argc, byte* argv)
     {
       if (argc>1)
         {
-          byte subcommand = argv[0];
-          byte pin = argv[1];
+          uint8_t subcommand = argv[0];
+          uint8_t pin = argv[1];
+          uint8_t pinmode = Firmata.getPinMode(pin);
+          if (pinmode != I2C && pinmode != ONEWIRE)
+            return false;
           switch(subcommand) {
           case ONEWIRE_SEARCH_REQUEST:
           case ONEWIRE_SEARCH_ALARMS_REQUEST:
             {
               Firmata.write(START_SYSEX);
               Firmata.write(ONEWIRE_DATA);
-              boolean isAlarmSearch = (subcommand == ONEWIRE_SEARCH_ALARMS_REQUEST);
+              bool isAlarmSearch = (subcommand == ONEWIRE_SEARCH_ALARMS_REQUEST);
               Firmata.write(isAlarmSearch ? (byte)ONEWIRE_SEARCH_ALARMS_REPLY : (byte)ONEWIRE_SEARCH_REPLY);
               Firmata.write(pin);
               Encoder7Bit.startBinaryWrite();
@@ -65,15 +79,10 @@ boolean DS2482Firmata::handleSysex(byte command, byte argc, byte* argv)
             }
           case ONEWIRE_CONFIG_REQUEST:
             {
-              if (argc==3 && Firmata.getPinMode(pin)!=IGNORE)
-                {
-                  //TODO check whether we should call Firmata.setPinMode(pin,I2C) here
-                  //TODO implement suitable oneWireConfig
-                  //oneWireConfig(pin, argv[2]); // this calls oneWireConfig again, this time setting the correct config (which doesn't cause harm though)
-                } else {
-                  return false;
-                }
-              break;
+              if (argc==4)
+                return configure(argv[2],argv[3]);
+              else
+                return false;
             }
           default:
             {
@@ -157,7 +166,10 @@ boolean DS2482Firmata::handleSysex(byte command, byte argc, byte* argv)
             }
           }
           if (ds2482.getState())
-            ds2482.reset();
+            {
+              ds2482.reset();
+              return false;
+            }
         }
       return true;
     }
@@ -167,4 +179,30 @@ boolean DS2482Firmata::handleSysex(byte command, byte argc, byte* argv)
 void DS2482Firmata::reset()
 {
   ds2482.reset();
+  config = 0;
+  address = 0;
+}
+
+bool DS2482Firmata::configure(uint8_t conf, uint8_t addr)
+{
+  bool changeAddr = (conf & DS2482_FIRMATA_CONFIG_FORCE) || (addr & DS2482_FIRMATA_CONFIG_ADDRESS != address & DS2482_FIRMATA_CONFIG_ADDRESS);
+  bool ret = true;
+  // DS2482_FIRMATA_CONFIG_ADDRESS 0x07 //bits 0-2
+  if (changeAddr && !ds2482.detect(addr & DS2482_FIRMATA_CONFIG_ADDRESS))
+    goto configfalse;
+  // DS2482_FIRMATA_CONFIG_CHANNEL 0x38 //bits 3-5
+  if ((changeAddr || (addr & DS2482_FIRMATA_CONFIG_CHANNEL != address & DS2482_FIRMATA_CONFIG_CHANNEL))
+      && !ds2482.selectChannel((addr & DS2482_FIRMATA_CONFIG_CHANNEL)>>3))
+    goto configfalse;
+  // DS2482_FIRMATA_CONFIG_MASK    0x0F //bit 0-3 config-bits of ds2482 (see DS2482.h constants DS2482_CFG_xxx)
+  if ((changeAddr || (conf & DS2482_FIRMATA_CONFIG_MASK != config & DS2482_FIRMATA_CONFIG_MASK))
+      && !ds2482.configure(conf & DS2482_FIRMATA_CONFIG_MASK))
+    goto configfalse;
+  goto configtrue;
+configfalse:
+  ret = false;
+configtrue:
+  config = conf;
+  address = addr;
+  return ret;
 }

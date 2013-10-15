@@ -153,7 +153,6 @@ public:
 #endif
 
 private:
-  uint8_t config;
   uint8_t mAddress;
   uint8_t mState;
   uint8_t readByte();
