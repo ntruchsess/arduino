@@ -1,5 +1,5 @@
 /*
-  OneWireFirmata.h - Firmata library
+  DS2482Firmata.h - Firmata library
   Copyright (C) 2012-2013 Norbert Truchsess. All rights reserved.
 
   This library is free software; you can redistribute it and/or
@@ -10,36 +10,26 @@
   See file LICENSE.txt for further informations on licensing terms.
 */
 
-#ifndef OneWireFirmata_h
-#define OneWireFirmata_h
+#ifndef DS2482Firmata_h
+#define DS2482Firmata_h
 
-#include "OneWire.h"
+#include "DS2482.h"
 #include <Firmata.h>
 #include <utility/FirmataFeature.h>
-
-#define ONEWIRE_CRC 0 //for OneWire.h: crc-functions are not used by Firmata
 
 //default value for power:
 #define ONEWIRE_POWER 1
 
-struct ow_device_info
-{
-  OneWire* device;
-  byte addr[8];
-  boolean power;
-};
-
-class OneWireFirmata:public FirmataFeature
+class DS2482Firmata:public FirmataFeature
 {
 public:
   boolean handlePinMode(byte pin, int mode);
   void handleCapability(byte pin);
   boolean handleSysex(byte command, byte argc, byte* argv);
   void reset();
-  
+
 private:
-  ow_device_info pinOneWire[TOTAL_PINS];
-  void oneWireConfig(byte pin, boolean power);
+  DS2482 ds2482;
 };
 
 #endif

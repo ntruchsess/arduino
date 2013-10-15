@@ -12,6 +12,7 @@
 
 #include <Firmata.h>
 #include <OneWireFirmata.h>
+#include <OneWireFirmataCommands.h>
 #include <Encoder7Bit.h>
 
 boolean OneWireFirmata::handlePinMode(byte pin, int mode)

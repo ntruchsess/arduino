@@ -61,6 +61,9 @@ I2CFirmata i2c;
 #include <utility/OneWireFirmata.h>
 OneWireFirmata oneWire;
 
+#include <utility/DS2482Firmata.h>
+DS2482Firmata ds2482;
+
 #include <utility/StepperFirmata.h>
 StepperFirmata stepper;
 
@@ -144,6 +147,9 @@ void setup()
 #endif
 #ifdef OneWireFirmata_h
   firmataExt.addFeature(oneWire);
+#endif
+#ifdef DS2482Firmata_h
+  firmataExt.addFeature(ds2482);
 #endif
 #ifdef StepperFirmata_h
   firmataExt.addFeature(stepper);
