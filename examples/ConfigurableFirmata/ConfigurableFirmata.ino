@@ -50,17 +50,18 @@ AnalogInputFirmata analogInput;
 #include <utility/AnalogOutputFirmata.h>
 AnalogOutputFirmata analogOutput;
 
-#include <Servo.h> //wouldn't load from ServoFirmata.h in Arduino1.0.3
+#include <Servo.h> //wouldn't load from ServoFirmata.h in Arduino1.0.x
 #include <utility/ServoFirmata.h>
 ServoFirmata servo;
 
-#include <Wire.h> //wouldn't load from I2CFirmata.h in Arduino1.0.3
+#include <Wire.h> //wouldn't load from I2CFirmata.h in Arduino1.0.x
 #include <utility/I2CFirmata.h>
 I2CFirmata i2c;
 
 //#include <utility/OneWireFirmata.h>
 //OneWireFirmata oneWire;
 
+#include <Wire.h> //wouldn't load from I2CFirmata.h in Arduino1.0.x
 #include <utility/DS2482Firmata.h>
 DS2482Firmata ds2482;
 

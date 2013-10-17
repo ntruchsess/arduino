@@ -14,6 +14,7 @@
 #include <DS2482Firmata.h>
 #include <OneWireFirmataCommands.h>
 #include <Encoder7Bit.h>
+#include <Wire.h>
 
 boolean DS2482Firmata::handlePinMode(byte pin, int mode)
 {
@@ -70,7 +71,7 @@ boolean DS2482Firmata::handleSysex(byte command, byte argc, byte* argv)
               ds2482.wireResetSearch();
               while (isAlarmSearch ? ds2482.wireSearchAlarms(addrArray) : ds2482.wireSearch(addrArray))
                 {
-                  for (int i=0;i<8;i++)
+                  for (uint8_t i=0; i < 8 ; i++)
                     Encoder7Bit.writeBinary(addrArray[i]);
                 }
               Encoder7Bit.endBinaryWrite();
@@ -189,6 +190,7 @@ boolean DS2482Firmata::handleSysex(byte command, byte argc, byte* argv)
 
 void DS2482Firmata::reset()
 {
+  Wire.begin();
   ds2482.reset();
   config = 0;
   address = 0;
