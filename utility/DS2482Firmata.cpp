@@ -30,7 +30,7 @@ boolean DS2482Firmata::handlePinMode(byte pin, int mode)
                 Firmata.setPinMode(i,ONEWIRE);
             }
         }
-      configure(DS2482_FIRMATA_CONFIG_FORCE,0);
+      configure(ONEWIRE_CONFIG_FORCE | ONEWIRE_CONFIG_ACTIVE_PULLUP,0);
       return true;
     }
   return false;
@@ -41,7 +41,7 @@ void DS2482Firmata::handleCapability(byte pin)
   if (IS_PIN_I2C(pin))
     {
       Firmata.write(ONEWIRE);
-      Firmata.write(1);
+      Firmata.write(2); // To differentiate from Standard (Arduino-only) OneWireFirmata which sends 1
     }
 }
 
@@ -79,13 +79,18 @@ boolean DS2482Firmata::handleSysex(byte command, byte argc, byte* argv)
             }
           case ONEWIRE_CONFIG_REQUEST:
             {
-              if (argc==4)
-                return configure(argv[2],argv[3]);
+              if (argc>2)
+                {
+                  uint8_t config = argv[2];
+                  uint8_t address = argc > 3 ? argv[3] : 0;
+                  return configure(config, address);
+                }
               else
                 return false;
             }
           default:
             {
+              bool power = config & DS2482_CFG_SPU;
               if (subcommand & ONEWIRE_RESET_REQUEST_BIT)
                 {
                   if (!ds2482.wireReset())
@@ -137,6 +142,9 @@ boolean DS2482Firmata::handleSysex(byte command, byte argc, byte* argv)
                     {
                       for (int i=0;i<numBytes;i++)
                         {
+                          //if configured turn strong pullup on before write of last byte (if no bytes are read after write)
+                          if (power && !(subcommand & ONEWIRE_READ_REQUEST_BIT) && i==numBytes-1 && !ds2482.configure(config))
+                            break;
                           ds2482.wireWriteByte(argv[i]);
                           if (ds2482.getState())
                             break;
@@ -154,6 +162,9 @@ boolean DS2482Firmata::handleSysex(byte command, byte argc, byte* argv)
                       Encoder7Bit.writeBinary((correlationId>>8)&0xFF);
                       for (int i=0; i<numReadBytes; i++)
                         {
+                          //if configured turn strong pullup on before read of last byte
+                          if (power && i==numReadBytes-1 && !ds2482.configure(config))
+                            break;
                           uint8_t val = ds2482.wireReadByte();
                           if (ds2482.getState())
                             break;
@@ -185,24 +196,24 @@ void DS2482Firmata::reset()
 
 bool DS2482Firmata::configure(uint8_t conf, uint8_t addr)
 {
-  bool changeAddr = (conf & DS2482_FIRMATA_CONFIG_FORCE) || (addr & DS2482_FIRMATA_CONFIG_ADDRESS != address & DS2482_FIRMATA_CONFIG_ADDRESS);
-  bool ret = true;
+  bool changeAddr = (conf & ONEWIRE_CONFIG_FORCE) || (addr & DS2482_FIRMATA_CONFIG_ADDRESS != address & DS2482_FIRMATA_CONFIG_ADDRESS);
   // DS2482_FIRMATA_CONFIG_ADDRESS 0x07 //bits 0-2
   if (changeAddr && !ds2482.detect(addr & DS2482_FIRMATA_CONFIG_ADDRESS))
-    goto configfalse;
+    return false;
   // DS2482_FIRMATA_CONFIG_CHANNEL 0x38 //bits 3-5
   if ((changeAddr || (addr & DS2482_FIRMATA_CONFIG_CHANNEL != address & DS2482_FIRMATA_CONFIG_CHANNEL))
       && !ds2482.selectChannel((addr & DS2482_FIRMATA_CONFIG_CHANNEL)>>3))
-    goto configfalse;
-  // DS2482_FIRMATA_CONFIG_MASK    0x0F //bit 0-3 config-bits of ds2482 (see DS2482.h constants DS2482_CFG_xxx)
-  if ((changeAddr || (conf & DS2482_FIRMATA_CONFIG_MASK != config & DS2482_FIRMATA_CONFIG_MASK))
-      && !ds2482.configure(conf & DS2482_FIRMATA_CONFIG_MASK))
-    goto configfalse;
-  goto configtrue;
-configfalse:
-  ret = false;
-configtrue:
-  config = conf;
+    return false;
   address = addr;
-  return ret;
+  // DS2482_FIRMATA_CONFIG_MASK    0x0F //bit 0-3 config-bits of ds2482 (see DS2482.h constants DS2482_CFG_xxx)
+  uint8_t newconfig = conf & ONEWIRE_CONFIG_STRONG_PULLUP ? DS2482_CFG_SPU : 0;
+  if (conf & ONEWIRE_CONFIG_ACTIVE_PULLUP)
+    newconfig |= DS2482_CFG_APU;
+  if (conf & ONEWIRE_CONFIG_HIGHSPEED)
+    newconfig |= DS2482_CFG_1WS;
+  if ((changeAddr || (newconfig != config))
+      && !ds2482.configure(newconfig))
+    return false;
+  config = newconfig;
+  return true;
 }

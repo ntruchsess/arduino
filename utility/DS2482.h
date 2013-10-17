@@ -69,7 +69,8 @@
 
 // DS2482 configuration register bit defines
 #define DS2482_CFG_APU          0x01    //< DS2482 Config Active Pull-Up
-#define DS2482_CFG_PPM          0x02    //< DS2482 Config Presence Pulse Masking
+// #define DS2482_CFG_PPM          0x02    //< DS2482 Config Presence Pulse Masking
+// (not recommendet according to Datasheet since 11/2009)
 #define DS2482_CFG_SPU          0x04    //< DS2482 Config Strong Pull-Up
 #define DS2482_CFG_1WS          0x08    //< DS2482 Config 1-Wire Speed
 

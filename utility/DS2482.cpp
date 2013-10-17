@@ -32,6 +32,9 @@
 #include "DS2482.h"
 #include "Wire.h"
 
+#define begin() Wire.beginTransmission(mAddress)
+#define end() Wire.endTransmission()
+
 DS2482::DS2482()
 : mAddress(DS2482_I2C_ADDR)
 {
@@ -47,10 +50,10 @@ bool DS2482::detect(uint8_t addr)
 
 void DS2482::setReadPtr(uint8_t readPtr)
 {
-  Wire.beginTransmission(mAddress);
+  begin();
   Wire.write(DS2482_CMD_SRP);  // changed from 'send' to 'write' according http://blog.makezine.com/2011/12/01/arduino-1-0-is-out-heres-what-you-need-to-know/'
   Wire.write(readPtr);
-  Wire.endTransmission();
+  end();
 }
 
 uint8_t DS2482::readByte()
@@ -75,8 +78,8 @@ uint8_t DS2482::busyWait(bool setReadPtr)
     {
       if (--loopCount <= 0)
       {
-              mState |= DS2482_STATE_TIMEOUT;
-              break;
+        mState |= DS2482_STATE_TIMEOUT;
+        break;
       }
       delayMicroseconds(20);
     }
@@ -87,9 +90,9 @@ uint8_t DS2482::busyWait(bool setReadPtr)
 bool DS2482::reset()
 {
   mState = 0;
-  Wire.beginTransmission(mAddress);
+  begin();
   Wire.write(DS2482_CMD_DRST);
-  Wire.endTransmission();
+  end();
   uint8_t result = readByte();
 
   // check for failure due to incorrect read back of status
@@ -98,12 +101,13 @@ bool DS2482::reset()
 
 bool DS2482::configure(uint8_t config)
 {
-  busyWait(true);
-  Wire.beginTransmission(mAddress);
+  if (busyWait(true) && (mState & DS2482_STATE_TIMEOUT))
+    return false;
+  begin();
   Wire.write(DS2482_CMD_WCFG);
   Wire.write(config | (~config << 4));
 
-  if (readByte() != config)
+  if (readByte() == config)
     return true;
   reset();
   return false;
@@ -148,19 +152,26 @@ bool DS2482::selectChannel(uint8_t channel)
     break;
   }
 
-  Wire.beginTransmission(mAddress);
+  if (busyWait(true) && (mState & DS2482_STATE_TIMEOUT))
+    return false;
+  begin();
   Wire.write(DS2482_CMD_CHSL);
   Wire.write(ch);
-  Wire.endTransmission();
+  end();
+  if (busyWait() && (mState & DS2482_STATE_TIMEOUT))
+    return false;
+  
   return (readByte() == ch_read);
 }
 
 bool DS2482::wireReset()
 {
-  busyWait(true);
-  Wire.beginTransmission(mAddress);
+  if (busyWait(true) && (mState & DS2482_STATE_TIMEOUT))
+    return 0;
+  begin();
   Wire.write(DS2482_CMD_1WRS);
-  Wire.endTransmission();
+  end();
+
   uint8_t status = busyWait();
 
   // check for short condition
@@ -172,19 +183,22 @@ bool DS2482::wireReset()
 
 void DS2482::wireWriteByte(uint8_t b)
 {
-  Wire.beginTransmission(mAddress);
+  if (busyWait(true) && (mState & DS2482_STATE_TIMEOUT))
+    return;
+  begin();
   Wire.write(DS2482_CMD_1WWB);
   Wire.write(b);
-  Wire.endTransmission();
-  busyWait();
+  end();
 }
 
 uint8_t DS2482::wireReadByte()
 {
-  Wire.beginTransmission(mAddress);
+  if (busyWait(true) && (mState & DS2482_STATE_TIMEOUT))
+    return 0;
+  begin();
   Wire.write(DS2482_CMD_1WRB);
-  Wire.endTransmission();
-  if (busyWait() & DS2482_STATUS_1WB)
+  end();
+  if (busyWait() && (mState & DS2482_STATE_TIMEOUT))
     return 0;
   setReadPtr(DS2482_READPTR_RDR);
   return readByte();
@@ -192,11 +206,12 @@ uint8_t DS2482::wireReadByte()
 
 void DS2482::wireWriteBit(uint8_t bit)
 {
-  Wire.beginTransmission(mAddress);
+  if (busyWait(true) && (mState & DS2482_STATE_TIMEOUT))
+    return;
+  begin();
   Wire.write(DS2482_CMD_1WSB);
   Wire.write(bit ? 0x80 : 0);
-  Wire.endTransmission();
-  busyWait();
+  end();
 }
 
 uint8_t DS2482::wireReadBit()
@@ -267,10 +282,10 @@ uint8_t DS2482::wireSearchInternal(uint8_t command, uint8_t *newAddr)
       direction = i == searchLastDisrepancy;
 
     busyWait();
-    Wire.beginTransmission(mAddress);
+    begin();
     Wire.write(DS2482_CMD_1WT);
     Wire.write(direction ? 0x80 : 0);
-    Wire.endTransmission();
+    end();
     uint8_t status = busyWait();
 
     uint8_t id = status & DS2482_STATUS_SBR;

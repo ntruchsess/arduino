@@ -22,8 +22,6 @@
 
 #define DS2482_FIRMATA_CONFIG_ADDRESS 0x07 //bits 0-2
 #define DS2482_FIRMATA_CONFIG_CHANNEL 0x38 //bits 3-5
-#define DS2482_FIRMATA_CONFIG_MASK    0x0F //bit 0-3 config-bits of ds2482 (see DS2482.h constants DS2482_CFG_xxx)
-#define DS2482_FIRMATA_CONFIG_FORCE   0x40 //bit 6 force ds2482 detect, channelselect and configure
 
 class DS2482Firmata:public FirmataFeature
 {
